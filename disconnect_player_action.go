@@ -19,7 +19,7 @@ func (r DisconnectPlayerAction) GetPayload() interface{} {
 
 func CreateDisconnectPlayerAction(player string) DisconnectPlayerAction {
 	return DisconnectPlayerAction{
-		Type: "Disconnect",
+		Type: "DisconnectPlayer",
 		Payload: DisconnectPlayerPayload{
 			Player: player,
 		},

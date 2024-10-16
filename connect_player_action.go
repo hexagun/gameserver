@@ -19,7 +19,7 @@ func (r ConnectPlayerAction) GetPayload() interface{} {
 
 func CreateConnectPlayerAction(player string) ConnectPlayerAction {
 	return ConnectPlayerAction{
-		Type: "Connect",
+		Type: "ConnectPlayer",
 		Payload: ConnectPlayerPayload{
 			Player: player,
 		},

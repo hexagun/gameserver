@@ -28,7 +28,7 @@ func TestConnectPlayerAction(t *testing.T) {
 	action = CreateConnectPlayerAction(playerName)
 	var connectPlayerAction ConnectPlayerAction = action.(ConnectPlayerAction)
 	var payload ConnectPlayerPayload = connectPlayerAction.GetPayload().(ConnectPlayerPayload)
-	assert.Equal(t, "Connect", connectPlayerAction.GetType(), "wrong action type")
+	assert.Equal(t, "ConnectPlayer", connectPlayerAction.GetType(), "wrong action type")
 	assert.Equal(t, playerName, payload.Player, "Payload Player is not named Player1")
 }
 
@@ -40,6 +40,6 @@ func TestDisconnectPlayerAction(t *testing.T) {
 	action = CreateDisconnectPlayerAction(playerName)
 	var disconnectPlayerAction DisconnectPlayerAction = action.(DisconnectPlayerAction)
 	var payload DisconnectPlayerPayload = disconnectPlayerAction.GetPayload().(DisconnectPlayerPayload)
-	assert.Equal(t, "Disconnect", disconnectPlayerAction.GetType(), "wrong action type")
+	assert.Equal(t, "DisconnectPlayer", disconnectPlayerAction.GetType(), "wrong action type")
 	assert.Equal(t, playerName, payload.Player, "Payload Player is not named Player1")
 }
