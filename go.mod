@@ -1,5 +1,7 @@
 module github.com/hexagun/gameserver
 
-go 1.22
+go 1.22.5
 
-require github.com/gorilla/websocket v1.5.3 // indirect
+require github.com/gorilla/websocket v1.5.3
+
+require github.com/hexagun/common v0.0.5
