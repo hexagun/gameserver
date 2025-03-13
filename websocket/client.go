@@ -9,17 +9,17 @@ import (
 	"github.com/hexagun/common"
 )
 
-type Client struct {
-	ID   string
-	Conn *websocket.Conn
-	Pool *Pool
+//type MessageDecoder func(message *common.IncomingMessage)
+
+type MessageDecoder interface {
+	Decode(message *common.IncomingMessage)
 }
 
-type Message struct {
-	Type     string          `json:"type"`
-	GameID   string          `json:"gameId,omitempty"`
-	PlayerID string          `json:"playerId,omitempty"`
-	Payload  json.RawMessage `json:"payload,omitempty"`
+type Client struct {
+	ID      string
+	Conn    *websocket.Conn
+	Pool    *Pool
+	Decoder MessageDecoder
 }
 
 func (c *Client) Read() {
@@ -31,6 +31,7 @@ func (c *Client) Read() {
 	for {
 		_, message, err := c.Conn.ReadMessage()
 
+		fmt.Printf("Message Received: %+v\n", message)
 		if err != nil {
 			log.Println(err)
 			return
@@ -42,8 +43,13 @@ func (c *Client) Read() {
 			continue
 		}
 
-		c.Pool.Broadcast <- msg
-		fmt.Printf("Message Received: %+v\n", message)
 		fmt.Printf("Message Decoded: %+v\n", msg)
+
+		c.DecodeMessage(&msg)
+
 	}
+}
+
+func (c *Client) DecodeMessage(msg *common.IncomingMessage) {
+	c.Decoder.Decode(msg)
 }
