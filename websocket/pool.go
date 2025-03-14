@@ -30,7 +30,7 @@ func (pool *Pool) Start() {
 			msg := &common.IncomingMessage{
 				Type:     "join",
 				GameID:   "111",
-				PlayerID: "222",
+				PlayerID: client.ID,
 				Payload:  nil,
 			}
 			client.Decoder.Decode(msg)

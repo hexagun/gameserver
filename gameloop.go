@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/hexagun/common"
 	"github.com/hexagun/gameserver/websocket"
@@ -38,11 +39,11 @@ func (g *Game) Dispatch(action common.Action) {
 }
 
 func (g *Game) UpdatePlayers(action common.Action) {
-	actionType := action.GetHeader().Type
+	header := action.GetHeader()
 
 	var im common.OutgoingMessage
 
-	switch actionType {
+	switch header.Type {
 	case common.GameStateUpdate:
 		im = common.OutgoingMessage{
 			Type:    "gamestateupdate",
@@ -55,7 +56,8 @@ func (g *Game) UpdatePlayers(action common.Action) {
 		}
 	case common.Join:
 		im = common.OutgoingMessage{
-			Type: "join",
+			Type:     "join",
+			PlayerID: strconv.Itoa(header.PlayerId),
 		}
 	case common.Leave:
 		im = common.OutgoingMessage{
@@ -71,7 +73,7 @@ func (g *Game) UpdatePlayers(action common.Action) {
 			Payload: action.GetPayload(),
 		}
 	default:
-		panic("Unknown action to update the players with")
+		panic("Unknown action to update the players with.")
 	}
 
 	g.pool.Broadcast <- im
@@ -86,28 +88,68 @@ func NewGame(pool *websocket.Pool) *Game {
 	}
 }
 
+func handleConnection(state *GameState, action common.Action) {
+
+	header := action.GetHeader()
+
+	if state.players[0].name == "" {
+		state.players[0].name = fmt.Sprintf("%d", header.PlayerId)
+		// 	state.PlayerXReady = true
+		// 	state.Turn = "X"
+		fmt.Printf("Player 1 (%s) has connected.\n", state.players[0].name)
+	} else if state.players[1].name == "" {
+		state.players[1].name = fmt.Sprintf("%d", header.PlayerId)
+		// 	state.PlayerO = player
+		// 	state.PlayerOReady = true
+		fmt.Printf("Player 2 (%s) has connected.\n", state.players[1].name)
+	} else {
+		fmt.Printf("Player %s cannot join, both slots are filled.\n", header.PlayerId)
+	}
+}
+
+func rootReducer(state *GameState, action common.Action) {
+	switch action.GetHeader().Type {
+	// case "PlayToken":
+	// var playTokenAction PlayTokenAction = action.(PlayTokenAction)
+	// var payload PlayTokenPayload = playTokenAction.GetPayload().(PlayTokenPayload)
+	// playToken(state, payload)
+	case common.Join:
+		handleConnection(state, action)
+	// case "DisconnectPlayer":
+	// var disconnectPlayerAction DisconnectPlayerAction = action.(DisconnectPlayerAction)
+	// var payload DisconnectPlayerPayload = disconnectPlayerAction.GetPayload().(DisconnectPlayerPayload)
+	// handleDisconnection(state, payload)
+	default:
+	}
+}
+
 func (g *Game) GameLoop() {
-	select {
-	case action := <-g.actionChannel:
-		g.UpdatePlayers(action)
-		fmt.Println(action)
-		// // // Handle the action
-		// rootReducer(&state, action)
-		// printBoard(state.board)
+	for {
+		select {
+		case action := <-g.actionChannel:
 
-		// if state.winner != "" {
-		// 	fmt.Printf("Player %s wins!\n", state.winner)
-		// 	//return
-		// } else if state.draw {
-		// 	fmt.Println("It's a draw!")
-		// 	//return
-		// }
+			rootReducer(&g.state, action)
 
-		// // Proceed to the next turn
-		// if state.activePlayerIndex == 0 {
-		// 	state.activePlayerIndex = 1
-		// } else {
-		// 	state.activePlayerIndex = 0
-		// }
+			g.UpdatePlayers(action)
+
+			// // // Handle the action
+			// rootReducer(&state, action)
+			// printBoard(state.board)
+
+			// if state.winner != "" {
+			// 	fmt.Printf("Player %s wins!\n", state.winner)
+			// 	//return
+			// } else if state.draw {
+			// 	fmt.Println("It's a draw!")
+			// 	//return
+			// }
+
+			// // Proceed to the next turn
+			// if state.activePlayerIndex == 0 {
+			// 	state.activePlayerIndex = 1
+			// } else {
+			// 	state.activePlayerIndex = 0
+			// }
+		}
 	}
 }

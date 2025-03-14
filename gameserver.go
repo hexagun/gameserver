@@ -57,8 +57,9 @@ func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Fprintf(w, "%+v\n", err)
 	}
-
+	idUser := r.URL.Query().Get("id")
 	client := &websocket.Client{
+		ID:      idUser,
 		Conn:    conn,
 		Pool:    pool,
 		Decoder: GameMessageDecoder{},
