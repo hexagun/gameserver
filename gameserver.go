@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -18,32 +19,50 @@ type GameMessageDecoder struct {
 
 func (g GameMessageDecoder) Decode(msg *common.IncomingMessage) {
 	var action common.Action
+	var gameId int
+	var playerId int
 
-	gameId, err := strconv.Atoi(msg.GameID)
-	if err != nil {
-		// ... handle error
-		panic(err)
+	if msg.GameID != "" {
+		id, err := strconv.Atoi(msg.GameID)
+		if err != nil {
+			// ... handle error
+			panic(err)
+		}
+		gameId = id
 	}
 
-	playerId, err := strconv.Atoi(msg.PlayerID)
-	if err != nil {
-		// ... handle error
-		panic(err)
+	if msg.PlayerID != "" {
+		id, err := strconv.Atoi(msg.PlayerID)
+		if err != nil {
+			// ... handle error
+			panic(err)
+		}
+		playerId = id
 	}
 
 	switch msg.Type {
 	//case "gamestateupdate":
 	//case "gameover":
 	//case "error":
-	//case "start":
+	case "start":
+		//action = common.NewStartAction(gameId, playerId)
 	case "join":
-		// string to int
-
 		action = common.NewJoinAction(gameId, playerId)
 	// case "leave":
 	// 	action = common.NewLeaveAction(gameId, playerId)
-	// case "move":
-	// 	action = common.NewMoveAction(gameId, playerId)
+	case "move":
+		var movePayload struct {
+			Row int `json:"row"`
+			Col int `json:"col"`
+		}
+		if err := json.Unmarshal(msg.Payload, &movePayload); err == nil {
+			fmt.Printf("Player made a move at row %d, col %d\n", movePayload.Row, movePayload.Col)
+			action = common.NewPlayerMoveAction(gameId, playerId, common.PlayerMovePayload{
+				Row: movePayload.Row,
+				Col: movePayload.Col,
+			})
+		}
+
 	default:
 		fmt.Println("Not Decoding stuff")
 	}
@@ -78,7 +97,6 @@ func setupRoutes(pool *websocket.Pool) {
 }
 
 func main() {
-
 	port := ":8100"
 	fmt.Println("Gameserver started on port %s", port)
 	pool = websocket.NewPool()
