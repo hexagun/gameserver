@@ -40,47 +40,48 @@ func (g *Game) Dispatch(action common.Action) {
 	g.actionChannel <- action
 }
 
-func (g *Game) UpdatePlayers(action common.Action) {
-	header := action.GetHeader()
+func (g *Game) UpdatePlayers(actionList []common.Action) {
+	for _, action := range actionList {
+		header := action.GetHeader()
 
-	var im common.OutgoingMessage
+		var im common.OutgoingMessage
 
-	switch header.Type {
-	case common.GameStateUpdate:
-		im = common.OutgoingMessage{
-			Type:    "gamestateupdate",
-			Payload: action.GetPayload(),
+		switch header.Type {
+		case common.GameStateUpdate:
+			im = common.OutgoingMessage{
+				Type:    "gamestateupdate",
+				Payload: action.GetPayload(),
+			}
+		case common.GameOver:
+			im = common.OutgoingMessage{
+				Type:    "gameover",
+				Payload: action.GetPayload(),
+			}
+		case common.Join:
+			im = common.OutgoingMessage{
+				Type:     "join",
+				PlayerID: strconv.Itoa(header.PlayerId),
+				GameID:   strconv.Itoa(header.GameId),
+			}
+		case common.Leave:
+			im = common.OutgoingMessage{
+				Type: "leave",
+			}
+		case common.Start:
+			im = common.OutgoingMessage{
+				Type: "start",
+			}
+		case common.Error:
+			im = common.OutgoingMessage{
+				Type:    "error",
+				Payload: action.GetPayload(),
+			}
+		default:
+			panic("Unknown action to update the players with.")
 		}
-	case common.GameOver:
-		im = common.OutgoingMessage{
-			Type:    "gameover",
-			Payload: action.GetPayload(),
-		}
-	case common.Join:
-		im = common.OutgoingMessage{
-			Type:     "join",
-			PlayerID: strconv.Itoa(header.PlayerId),
-			GameID:   strconv.Itoa(header.GameId),
-		}
-	case common.Leave:
-		im = common.OutgoingMessage{
-			Type: "leave",
-		}
-	case common.Start:
-		im = common.OutgoingMessage{
-			Type: "start",
-		}
-	case common.Error:
-		im = common.OutgoingMessage{
-			Type:    "error",
-			Payload: action.GetPayload(),
-		}
-	default:
-		panic("Unknown action to update the players with.")
+
+		g.pool.Broadcast <- im
 	}
-
-	g.pool.Broadcast <- im
-
 }
 
 func NewGame(pool *websocket.Pool) *Game {
@@ -268,11 +269,11 @@ func waitingForStateReducer(state *GameState, action common.Action) common.Actio
 	switch action.GetHeader().Type {
 	case common.Join:
 		if handleConnection(state, action) {
-			type StartPayload struct {
-				YourToken  string //`json:"yourToken"`
-				OpponentID string //`json:"opponentId"`
-				FirstTurn  string //`json:"firstTurn"` // could also be a player ID
-			}
+			// type StartPayload struct {
+			// 	YourToken  string //`json:"yourToken"`
+			// 	OpponentID string //`json:"opponentId"`
+			// 	FirstTurn  string //`json:"firstTurn"` // could also be a player ID
+			// }
 
 			//coin toss for token
 			startingPlayerToken := "o"
@@ -314,7 +315,7 @@ func readyReducer(state *GameState, action common.Action) common.Action {
 	switch action.GetHeader().Type {
 	case common.Start:
 		startGame(state, action)
-
+		return action
 	case common.Leave:
 		handleDisconnection(state, action)
 	default:
@@ -350,9 +351,10 @@ func gameEndedReducer(state *GameState, action common.Action) {
 }
 func (g *Game) GameLoop() {
 	for {
+
 		select {
 		case action := <-g.actionChannel:
-			responseAction := action
+			actionList := make([]common.Action, 0)
 			switch g.state.state {
 			case InitialState:
 				initialStateReducer(&g.state, action)
@@ -366,13 +368,13 @@ func (g *Game) GameLoop() {
 			case ReadyToStart:
 				startAction := readyReducer(&g.state, action)
 				if startAction != nil {
-					responseAction = action
+					actionList = append(actionList, startAction)
 				}
 
 			case InGame:
 				gameAction := inGameReducer(&g.state, action)
 				if gameAction != nil {
-					responseAction = gameAction
+					actionList = append(actionList, gameAction)
 					g.Dispatch(gameAction)
 				}
 			case Rejoin:
@@ -386,8 +388,11 @@ func (g *Game) GameLoop() {
 				// quit server
 			}
 
+			// multiple Response action, 2 max problaby (each player)
+			// for example, startAction
+
 			// if game started, collect play action and deduce if win
-			g.UpdatePlayers(responseAction) // Draw, kind of
+			g.UpdatePlayers(actionList) // Draw, kind of
 
 			// // // Handle the action
 			// rootReducer(&state, action)
