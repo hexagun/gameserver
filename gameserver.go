@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/hexagun/common"
 	"github.com/hexagun/gameserver/websocket"
@@ -15,58 +13,12 @@ var game *Game
 var pool *websocket.Pool
 
 type GameMessageDecoder struct {
+	messageDecoder common.MessageDecoder
 }
 
 func (g GameMessageDecoder) Decode(msg *common.IncomingMessage) {
-	var action common.Action
-	var gameId int
-	var playerId int
 
-	if msg.GameID != "" {
-		id, err := strconv.Atoi(msg.GameID)
-		if err != nil {
-			// ... handle error
-			panic(err)
-		}
-		gameId = id
-	}
-
-	if msg.PlayerID != "" {
-		id, err := strconv.Atoi(msg.PlayerID)
-		if err != nil {
-			// ... handle error
-			panic(err)
-		}
-		playerId = id
-	}
-
-	switch msg.Type {
-	//case "gamestateupdate":
-	//case "gameover":
-	//case "error":
-	case "start":
-		//action = common.NewStartAction(gameId, playerId)
-	case "join":
-		action = common.NewJoinAction(gameId, playerId)
-	// case "leave":
-	// 	action = common.NewLeaveAction(gameId, playerId)
-	case "move":
-		var movePayload struct {
-			Row int `json:"row"`
-			Col int `json:"col"`
-		}
-		if err := json.Unmarshal(msg.Payload, &movePayload); err == nil {
-			fmt.Printf("Player made a move at row %d, col %d\n", movePayload.Row, movePayload.Col)
-			action = common.NewPlayerMoveAction(gameId, playerId, common.PlayerMovePayload{
-				Row: movePayload.Row,
-				Col: movePayload.Col,
-			})
-		}
-
-	default:
-		fmt.Println("Not Decoding stuff")
-	}
-
+	action := g.messageDecoder.Decode(msg)
 	game.Dispatch(action)
 }
 

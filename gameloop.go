@@ -40,46 +40,57 @@ func (g *Game) Dispatch(action common.Action) {
 	g.actionChannel <- action
 }
 
+func (g *Game) Encode(action common.Action) common.OutgoingMessage {
+	var im common.OutgoingMessage
+	header := action.GetHeader()
+	switch header.Type {
+	case common.GameStateUpdate:
+		im = common.OutgoingMessage{
+			Type:    "gamestateupdate",
+			Payload: action.GetPayload(),
+		}
+	case common.GameOver:
+		im = common.OutgoingMessage{
+			Type:    "gameover",
+			Payload: action.GetPayload(),
+		}
+	case common.Join:
+		im = common.OutgoingMessage{
+			Type:     "join",
+			PlayerID: strconv.Itoa(header.PlayerId),
+			GameID:   strconv.Itoa(header.GameId),
+		}
+	case common.Leave:
+		im = common.OutgoingMessage{
+			Type: "leave",
+		}
+	case common.Start:
+		im = common.OutgoingMessage{
+			Type:     "start",
+			PlayerID: strconv.Itoa(header.PlayerId),
+			GameID:   strconv.Itoa(header.GameId),
+			Payload:  action.GetPayload(),
+		}
+	case common.Error:
+		im = common.OutgoingMessage{
+			Type:    "error",
+			Payload: action.GetPayload(),
+		}
+	default:
+		panic("Unknown action to update the players with.")
+	}
+	return im
+}
+
+func (g *Game) UpdatePlayer(id string, action common.Action) {
+	im := g.Encode(action)
+	g.pool.Send <- im
+}
+
 func (g *Game) UpdatePlayers(actionList []common.Action) {
 	for _, action := range actionList {
-		header := action.GetHeader()
-
-		var im common.OutgoingMessage
-
-		switch header.Type {
-		case common.GameStateUpdate:
-			im = common.OutgoingMessage{
-				Type:    "gamestateupdate",
-				Payload: action.GetPayload(),
-			}
-		case common.GameOver:
-			im = common.OutgoingMessage{
-				Type:    "gameover",
-				Payload: action.GetPayload(),
-			}
-		case common.Join:
-			im = common.OutgoingMessage{
-				Type:     "join",
-				PlayerID: strconv.Itoa(header.PlayerId),
-				GameID:   strconv.Itoa(header.GameId),
-			}
-		case common.Leave:
-			im = common.OutgoingMessage{
-				Type: "leave",
-			}
-		case common.Start:
-			im = common.OutgoingMessage{
-				Type: "start",
-			}
-		case common.Error:
-			im = common.OutgoingMessage{
-				Type:    "error",
-				Payload: action.GetPayload(),
-			}
-		default:
-			panic("Unknown action to update the players with.")
-		}
-
+		//header := action.GetHeader()
+		im := g.Encode(action)
 		g.pool.Broadcast <- im
 	}
 }
@@ -100,21 +111,14 @@ func handleConnection(state *GameState, action common.Action) bool {
 
 	if state.players[0].name == "" {
 		state.players[0].name = fmt.Sprintf("%d", header.PlayerId)
-		// 	state.PlayerXReady = true
-		//state.players[0].token = "x"
-
 		tr := rules[state.state][0] // Join
 		state.state = tr.State
-
 		fmt.Printf("Player 1 (%s) has connected.\n", state.players[0].name)
 	} else if state.players[1].name == "" {
 		state.players[1].name = fmt.Sprintf("%d", header.PlayerId)
-		//state.players[0].token = "o"
-		// 	state.PlayerO = player
-		// 	state.PlayerOReady = true
-		fmt.Printf("Player 2 (%s) has connected.\n", state.players[1].name)
 		tr := rules[state.state][0] // Join
 		state.state = tr.State
+		fmt.Printf("Player 2 (%s) has connected.\n", state.players[1].name)
 	} else {
 		fmt.Printf("Player %s cannot join, both slots are filled.\n", header.PlayerId)
 		return false
@@ -130,7 +134,6 @@ func handleDisconnection(state *GameState, action common.Action) {
 		state.players[0].name = ""
 		// 	state.PlayerXReady = true
 		// 	state.Turn = "X"
-
 		tr := rules[state.state][Leave]
 		state.state = tr.State
 		fmt.Printf("Player 1 (%s) has disconnected.\n", header.PlayerId)
@@ -350,14 +353,17 @@ func gameEndedReducer(state *GameState, action common.Action) {
 	}
 }
 func (g *Game) GameLoop() {
-	for {
 
+	for {
+		actionList := make([]common.Action, 0)
 		select {
 		case action := <-g.actionChannel:
-			actionList := make([]common.Action, 0)
+			broadcast := true
+
 			switch g.state.state {
 			case InitialState:
 				initialStateReducer(&g.state, action)
+				actionList = append(actionList, action)
 			case WaitingForOpponent:
 				startAction := waitingForStateReducer(&g.state, action)
 				if startAction != nil {
@@ -368,14 +374,38 @@ func (g *Game) GameLoop() {
 			case ReadyToStart:
 				startAction := readyReducer(&g.state, action)
 				if startAction != nil {
+
 					actionList = append(actionList, startAction)
+
+					// Find opponent ID
+					opponentPlayerIndex := 0
+					startingPlayerIndex := 1
+					if startAction.GetHeader().PlayerId == g.state.players[0].id {
+						opponentPlayerIndex = 1
+						startingPlayerIndex = 0
+					}
+
+					opponentId, _ := strconv.Atoi(g.state.players[opponentPlayerIndex].name)
+					opponentStartAction := common.NewStartAction(action.GetHeader().GameId,
+						opponentId,
+						common.StartPayload{
+							YourToken:  g.state.players[opponentPlayerIndex].token,
+							OpponentID: g.state.players[startingPlayerIndex].name,
+							FirstTurn:  g.state.players[startingPlayerIndex].name,
+						})
+
+					actionList = append(actionList, opponentStartAction)
+
+					broadcast = false // Send individual messages
 				}
 
 			case InGame:
 				gameAction := inGameReducer(&g.state, action)
 				if gameAction != nil {
 					actionList = append(actionList, gameAction)
-					g.Dispatch(gameAction)
+					go func() {
+						g.Dispatch(gameAction)
+					}()
 				}
 			case Rejoin:
 				rejoinReducer(&g.state, action)
@@ -392,10 +422,17 @@ func (g *Game) GameLoop() {
 			// for example, startAction
 
 			// if game started, collect play action and deduce if win
-			g.UpdatePlayers(actionList) // Draw, kind of
+			// Draw, kind of
+			if broadcast {
+				g.UpdatePlayers(actionList)
+			} else {
+				for _, action := range actionList {
+					g.UpdatePlayer(strconv.Itoa(action.GetHeader().PlayerId), action)
+				}
+			}
 
 			// // // Handle the action
-			// rootReducer(&state, action)
+			// rootReducer(&state, action)o
 			// printBoard(state.board)
 
 			// if state.winner != "" {

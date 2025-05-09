@@ -11,6 +11,7 @@ type Pool struct {
 	Unregister chan *Client
 	Clients    map[*Client]bool
 	Broadcast  chan common.OutgoingMessage
+	Send       chan common.OutgoingMessage
 }
 
 func NewPool() *Pool {
@@ -19,6 +20,7 @@ func NewPool() *Pool {
 		Unregister: make(chan *Client),
 		Clients:    make(map[*Client]bool),
 		Broadcast:  make(chan common.OutgoingMessage),
+		Send:       make(chan common.OutgoingMessage),
 	}
 }
 
@@ -57,6 +59,21 @@ func (pool *Pool) Start() {
 					return
 				}
 			}
+			break
+		case message := <-pool.Send:
+
+			for client, _ := range pool.Clients {
+				if client.ID == message.PlayerID {
+					fmt.Println("Sending message to client:", client.ID)
+					if err := client.Conn.WriteJSON(message); err != nil {
+						fmt.Println(err)
+					}
+					fmt.Println("Message Sent to client:", client.ID)
+					//return
+				}
+			}
+			fmt.Println("Message Sent")
+			break
 		}
 	}
 }
