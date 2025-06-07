@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/hexagun/common"
 	"github.com/hexagun/gameserver/websocket"
 )
@@ -22,15 +23,61 @@ func (g GameMessageDecoder) Decode(msg *common.IncomingMessage) {
 	game.Dispatch(action)
 }
 
+var secretKey = []byte("secret-key")
+
+func validateToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Ensure the signing method is HMAC
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return secretKey, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return token, nil
+}
+
 func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
 	fmt.Println("WebSocket Endpoint Hit")
+
+	tokenStr := r.URL.Query().Get("token")
+	//idUser := r.URL.Query().Get("id")
+
+	token, errToken := validateToken(tokenStr)
+	if errToken != nil {
+		// w.WriteHeader(http.StatusUnauthorized)
+		// fmt.Fprint(w, "Invalid token")
+		fmt.Println("Invalid token")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Optional: extract claims
+	// Should probably be id and a username retrieval from other service
+	username := ""
+	if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		fmt.Println("Token is valid!")
+		//username = string(claims["username"])
+		fmt.Println("Name:", claims["username"])
+		fmt.Println("Expires:", claims["exp"])
+		username = claims["username"].(string)
+	}
+
 	conn, err := websocket.Upgrade(w, r)
 	if err != nil {
 		fmt.Fprintf(w, "%+v\n", err)
 	}
-	idUser := r.URL.Query().Get("id")
+
 	client := &websocket.Client{
-		ID:      idUser,
+		ID:      username,
 		Conn:    conn,
 		Pool:    pool,
 		Decoder: GameMessageDecoder{},
