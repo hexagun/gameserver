@@ -11,7 +11,7 @@ import (
 type Pool struct {
 	Register   chan *Client
 	Unregister chan *Client
-	Clients    map[*Client]bool
+	Clients    map[string]*Client
 	Broadcast  chan common.OutgoingMessage
 	Send       chan common.OutgoingMessage
 }
@@ -20,7 +20,7 @@ func NewPool() *Pool {
 	return &Pool{
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
-		Clients:    make(map[*Client]bool),
+		Clients:    make(map[string]*Client),
 		Broadcast:  make(chan common.OutgoingMessage),
 		Send:       make(chan common.OutgoingMessage),
 	}
@@ -44,7 +44,7 @@ func (pool *Pool) Start() {
 				Payload:  nil,
 			}
 			client.Decoder.Decode(msg)
-			pool.Clients[client] = true
+			pool.Clients[client.ID] = client
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
 			// for client, _ := range pool.Clients {
 			// 	fmt.Println(client)
@@ -53,15 +53,15 @@ func (pool *Pool) Start() {
 			// }
 			break
 		case client := <-pool.Unregister:
-			delete(pool.Clients, client)
+			delete(pool.Clients, client.ID)
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
-			for client, _ := range pool.Clients {
-				client.Conn.WriteJSON(common.OutgoingMessage{Type: ""})
-			}
+			// for client, _ := range pool.Clients {
+			// 	client.Conn.WriteJSON(common.OutgoingMessage{Type: ""})
+			// }
 			break
 		case message := <-pool.Broadcast:
 			fmt.Println("Sending message to all clients in Pool")
-			for client, _ := range pool.Clients {
+			for _, client := range pool.Clients {
 				if err := client.Conn.WriteJSON(message); err != nil {
 					fmt.Println(err)
 					return
@@ -70,9 +70,9 @@ func (pool *Pool) Start() {
 			break
 		case message := <-pool.Send:
 
-			for client, _ := range pool.Clients {
-				if client.ID == message.PlayerID {
-					fmt.Println("Sending message to client:", client.ID)
+			for id, client := range pool.Clients {
+				if id == message.PlayerID {
+					fmt.Println("Sending message to client:", id)
 					fmt.Println("Sending message:", message)
 					if err := client.Conn.WriteJSON(message); err != nil {
 						fmt.Println(err)
