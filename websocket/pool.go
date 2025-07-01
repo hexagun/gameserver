@@ -1,7 +1,9 @@
 package websocket
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 
 	"github.com/hexagun/common"
 )
@@ -24,14 +26,20 @@ func NewPool() *Pool {
 	}
 }
 
+func GenerateCustomID() int {
+	randomNumber, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+	return int(randomNumber.Int64())
+}
+
 func (pool *Pool) Start() {
+	gameId := GenerateCustomID()
 	for {
 		select {
 		case client := <-pool.Register:
 
 			msg := &common.IncomingMessage{
 				Type:     "join",
-				GameID:   "111",
+				GameID:   fmt.Sprintf("%d", gameId),
 				PlayerID: client.ID,
 				Payload:  nil,
 			}
@@ -65,11 +73,10 @@ func (pool *Pool) Start() {
 			for client, _ := range pool.Clients {
 				if client.ID == message.PlayerID {
 					fmt.Println("Sending message to client:", client.ID)
+					fmt.Println("Sending message:", message)
 					if err := client.Conn.WriteJSON(message); err != nil {
 						fmt.Println(err)
 					}
-					fmt.Println("Message Sent to client:", client.ID)
-					//return
 				}
 			}
 			fmt.Println("Message Sent")

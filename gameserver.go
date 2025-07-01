@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/hexagun/common"
@@ -53,8 +54,6 @@ func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
 
 	token, errToken := validateToken(tokenStr)
 	if errToken != nil {
-		// w.WriteHeader(http.StatusUnauthorized)
-		// fmt.Fprint(w, "Invalid token")
 		fmt.Println("Invalid token")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -62,13 +61,16 @@ func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
 
 	// Optional: extract claims
 	// Should probably be id and a username retrieval from other service
-	username := ""
+	//username := ""
+	id := 0
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
 		fmt.Println("Token is valid!")
 		//username = string(claims["username"])
 		fmt.Println("Name:", claims["username"])
+		fmt.Println("Id:", claims["uid"])
 		fmt.Println("Expires:", claims["exp"])
-		username = claims["username"].(string)
+		//username = claims["username"].(string)
+		id = int(claims["uid"].(float64))
 	}
 
 	conn, err := websocket.Upgrade(w, r)
@@ -77,7 +79,7 @@ func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &websocket.Client{
-		ID:      username,
+		ID:      strconv.Itoa(id),
 		Conn:    conn,
 		Pool:    pool,
 		Decoder: GameMessageDecoder{},

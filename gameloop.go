@@ -298,6 +298,7 @@ func waitingForStateReducer(state *GameState, action common.Action) common.Actio
 
 			playerId, _ := strconv.Atoi(state.players[startingPlayerIndex].name)
 
+			// Starting player action
 			return common.NewStartAction(action.GetHeader().GameId,
 				playerId,
 				common.StartPayload{
@@ -359,17 +360,19 @@ func (g *Game) GameLoop() {
 		select {
 		case action := <-g.actionChannel:
 			broadcast := true
-
+			fmt.Printf("Processing action (%s)\n", action)
 			switch g.state.state {
 			case InitialState:
 				initialStateReducer(&g.state, action)
 				actionList = append(actionList, action)
 			case WaitingForOpponent:
+				broadcast = false
 				startAction := waitingForStateReducer(&g.state, action)
 				if startAction != nil {
 					go func() {
 						g.Dispatch(startAction)
 					}()
+					actionList = append(actionList, action) // join action
 				}
 			case ReadyToStart:
 				startAction := readyReducer(&g.state, action)
@@ -378,14 +381,15 @@ func (g *Game) GameLoop() {
 					actionList = append(actionList, startAction)
 
 					// Find opponent ID
+					startingPlayerIndex := g.state.activePlayerIndex
 					opponentPlayerIndex := 0
-					startingPlayerIndex := 1
-					if startAction.GetHeader().PlayerId == g.state.players[0].id {
+					if startingPlayerIndex == 0 {
 						opponentPlayerIndex = 1
-						startingPlayerIndex = 0
 					}
 
 					opponentId, _ := strconv.Atoi(g.state.players[opponentPlayerIndex].name)
+
+					// Starting player action
 					opponentStartAction := common.NewStartAction(action.GetHeader().GameId,
 						opponentId,
 						common.StartPayload{
