@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"net/http"
 	"strconv"
 
 	"github.com/hexagun/common"
@@ -127,22 +128,40 @@ func handleConnection(state *GameState, action common.Action) bool {
 	return true
 }
 
+// ish...
+func handleDisconnectionState(state *GameState) {
+	switch state.state {
+	case WaitingForOpponent:
+		tr := rules[state.state][1] // Leave
+		state.state = tr.State
+	case ReadyToStart:
+		tr := rules[state.state][1] // Leave
+		state.state = tr.State
+	case InGame:
+		tr := rules[state.state][0] // Leave
+		state.state = tr.State
+	case Rejoin:
+		tr := rules[state.state][0] // Leave
+		state.state = tr.State
+	case GameEnded:
+		tr := rules[state.state][0] // Leave, GameEnded
+		state.state = tr.State
+	default:
+		panic("unknown state transfer")
+	}
+
+}
+
 func handleDisconnection(state *GameState, action common.Action) {
 
 	header := action.GetHeader()
 	if state.players[0].name == strconv.Itoa(header.PlayerId) {
 		state.players[0].name = ""
-		// 	state.PlayerXReady = true
-		// 	state.Turn = "X"
-		tr := rules[state.state][Leave]
-		state.state = tr.State
+		handleDisconnectionState(state)
 		fmt.Printf("Player 1 (%s) has disconnected.\n", header.PlayerId)
 	} else if state.players[1].name == "" {
 		state.players[1].name = fmt.Sprintf("%d", header.PlayerId)
-		// 	state.PlayerO = player
-		// 	state.PlayerOReady = true
-		tr := rules[state.state][Leave]
-		state.state = tr.State
+		handleDisconnectionState(state)
 		fmt.Printf("Player 2 (%s) has disconnected.\n", state.players[1].name)
 	} else {
 		fmt.Printf("Player %s cannot disconnect, both slots are filled.\n", header.PlayerId)
@@ -346,8 +365,45 @@ func rejoinReducer(state *GameState, action common.Action) {
 	default:
 	}
 }
+
+type GameResultClient struct {
+	client *http.Client
+}
+
+func sendGameResult(state *GameState, action common.Action) {
+
+	// header := action.GetHeader()
+	// payload := action.GetPayload().(common.GameOverPayload)
+
+	// winnerId := payload.Winner
+
+	// data := map[string]string{
+	// 	"GameId":     strconv.Itoa(header.GameId),
+	// 	"player1_id": state.players[0].name,
+	// 	"player2_id": state.players[1].name,
+	// 	"winner_id":  winnerId,
+	// 	//"board":      payload.Board, //partial debug
+	// }
+
+	// jsonData, err := json.Marshal(data)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// target := fmt.Sprintf("http://%s:%d/gameresult", viper.GetString("gameresult.url"), viper.GetInt("gameresult.port"))
+	// resp, err := http.Post(target, "application/json", bytes.NewBuffer(jsonData))
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// defer resp.Body.Close()
+
+	// Transition
+}
+
 func gameEndedReducer(state *GameState, action common.Action) {
 	switch action.GetHeader().Type {
+	case common.GameOver:
+		sendGameResult(state, action)
 	case common.Leave:
 		handleDisconnection(state, action)
 	default:

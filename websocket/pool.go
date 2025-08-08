@@ -53,6 +53,15 @@ func (pool *Pool) Start() {
 			// }
 			break
 		case client := <-pool.Unregister:
+
+			msg := &common.IncomingMessage{
+				Type:     "leave",
+				GameID:   fmt.Sprintf("%d", gameId),
+				PlayerID: client.ID,
+				Payload:  nil,
+			}
+			client.Decoder.Decode(msg)
+
 			delete(pool.Clients, client.ID)
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
 			// for client, _ := range pool.Clients {
