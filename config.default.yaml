@@ -1,0 +1,4 @@
+environment: dev
+gameresult:
+  url: 10.0.0.100
+  port: 6666

@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
+
 	"github.com/hexagun/common"
 	"github.com/hexagun/gameserver/websocket"
 )
@@ -44,6 +47,33 @@ func validateToken(tokenString string) (*jwt.Token, error) {
 	}
 
 	return token, nil
+}
+
+func initLogging() {
+	// UNIX Time is faster and smaller than most timestamps
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log.Logger = log.With().Caller().Logger()
+}
+
+func setConfig() {
+	viper.SetConfigName("config")  // name of config file (without extension)
+	viper.SetConfigType("yaml")    // REQUIRED if the config file does not have the extension in the name
+	viper.AddConfigPath("/config") // path to look for the config file in
+	viper.AddConfigPath(".")       // optionally look for config in the working directory
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found; ignore error if desired
+		} else {
+			// Config file was found but another error was produced
+		}
+	}
+
+	log.Info().Msg("configs:")
+	log.Debug().Msg(fmt.Sprintf("%s%s", "environment:", viper.GetString("environment")))
+	log.Debug().Msg(fmt.Sprintf("%s%d", "gameserver.port:", viper.GetInt("gameserver.port")))
+	log.Debug().Msg(fmt.Sprintf("%s%d", "gameresult.port:", viper.GetInt("gameresult.port")))
+	log.Debug().Msg(fmt.Sprintf("%s%d", "gameresult.url:", viper.GetInt("gameresult.url")))
 }
 
 func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
@@ -98,12 +128,16 @@ func setupRoutes(pool *websocket.Pool) {
 }
 
 func main() {
-	port := ":8100"
-	fmt.Println("Gameserver started on port %s", port)
+	initLogging()
+	setConfig()
+
+	gameServerPort := viper.GetInt("gameserver.port")
+	port := fmt.Sprintf("%s%d", ":", gameServerPort)
+	log.Debug().Msg(fmt.Sprintf("Gameserver started on port %s", port))
 	pool = websocket.NewPool()
 
 	game = NewGame(pool)
 	go game.GameLoop()
 	setupRoutes(pool)
-	log.Fatal(http.ListenAndServe(port, nil))
+	log.Fatal().Err(http.ListenAndServe(port, nil))
 }

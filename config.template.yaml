@@ -1,0 +1,7 @@
+environment: "${ENVIRONMENT}"
+gameresult:
+  url: "${GAMERESULT_URL}"
+  port: ${GAMERESULT_PORT}
+gameserver:
+  port: ${GAMESERVER_PORT}
+
